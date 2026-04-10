@@ -8,10 +8,9 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from backend.db.session import get_db
-from backend.schemas.request_schema import PRCreate, PRUpdate
+from backend.schemas.request_schema import PRCreate, PRUpdate, DescriptionRewriteRequest
 from backend.services import request_service
 from backend.repositories import request_repo
-from backend.utils.response_formatter import error_response
 
 router = APIRouter(
     prefix="/purchase-request",
@@ -20,9 +19,27 @@ router = APIRouter(
 
 
 @router.post(
+    "/rewrite-description",
+    summary="AI Rewrite Description",
+    description="Rewrite description into a structured procurement-ready format and return missing details.",
+)
+async def rewrite_description(data: DescriptionRewriteRequest):
+    return await request_service.rewrite_description(data)
+
+
+@router.post(
+    "/enhance-description",
+    summary="AI Rewrite Description (Compatibility)",
+    description="Compatibility alias for rewrite-description endpoint.",
+)
+async def enhance_description(data: DescriptionRewriteRequest):
+    return await request_service.rewrite_description(data)
+
+
+@router.post(
     "",
     summary="Create a new Purchase Request",
-    description="Submit a procurement form. AI validates and enhances the request, then saves it to the database and generates a PDF.",
+    description="Submit a procurement form and generate PR PDF using final form values.",
     status_code=status.HTTP_201_CREATED,
 )
 async def create_purchase_request(
@@ -56,7 +73,7 @@ async def get_purchase_request(pr_id: str, db: Session = Depends(get_db)):
 @router.put(
     "/{pr_id}",
     summary="Update a Purchase Request",
-    description="Update fields on a PR. If core procurement fields change, AI validation is re-run and a new PDF is generated.",
+    description="Update fields on a PR. If printable fields change, a new PDF is generated.",
 )
 async def update_purchase_request(
     pr_id: str,

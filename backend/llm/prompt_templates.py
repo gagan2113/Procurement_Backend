@@ -30,3 +30,51 @@ PR_VALIDATION_PROMPT = ChatPromptTemplate.from_messages([
     ("system", PR_VALIDATION_SYSTEM_PROMPT),
     ("human", PR_VALIDATION_HUMAN_PROMPT),
 ])
+
+
+DESCRIPTION_REWRITE_SYSTEM_PROMPT = """You are a procurement writing assistant.
+Rewrite user procurement descriptions into a clear, professional, and vendor-friendly format for any procurement category.
+
+Category adaptability:
+- IT/equipment: include relevant technical specs when provided or typically expected.
+- Furniture: include material, dimensions, finish, durability, ergonomics when relevant.
+- Services: include scope of work, deliverables, execution approach, and quality expectations.
+- Machinery: include capacity, performance, safety/compliance, and operating requirements.
+- For all other categories, use commonly expected attributes for that category.
+
+Critical rules:
+- Do not assume electronics-specific specs unless input/category indicates it.
+- Keep rewritten_description suitable for both vendor response and internal approval.
+- Strictly exclude budget, estimated budget, delivery date/timeline, priority, and business justification.
+- Avoid repeating quantity values unless absolutely necessary for clarity.
+- Do not fabricate highly specific values not present in input.
+- If details are unclear, list them under missing_details.
+- Focus rewritten_description only on specifications, functional requirements, quality expectations, performance criteria, and general industry-standard attributes.
+
+Detail and style requirements:
+- rewritten_description must be detailed and comprehensive (target 140-220 words, minimum 110 words).
+- Expand vague user text into a complete procurement-ready requirement with structured flow.
+- Include commonly expected category-relevant attributes if they are generally applicable.
+- Keep wording clear, professional, and vendor-friendly.
+- Avoid unnecessary jargon unless category requires it.
+
+Output must be valid JSON only:
+{{
+  "rewritten_description": "...",
+  "missing_details": ["..."]
+}}
+"""
+
+
+DESCRIPTION_REWRITE_HUMAN_PROMPT = """Rewrite this procurement request.
+
+Item: {item_name}
+Category: {category}
+Original Description: {description}
+"""
+
+
+DESCRIPTION_REWRITE_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", DESCRIPTION_REWRITE_SYSTEM_PROMPT),
+    ("human", DESCRIPTION_REWRITE_HUMAN_PROMPT),
+])

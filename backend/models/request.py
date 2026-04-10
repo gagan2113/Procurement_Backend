@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, DateTime, JSON, Text
+from sqlalchemy import Column, String, Integer, Float, DateTime, Date, Text
 from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
 from backend.db.base import Base
 from backend.config.constants import PRStatus, AIStatus
@@ -17,6 +17,7 @@ class PurchaseRequest(Base):
     category = Column(String(100), nullable=False)
     quantity = Column(Integer, nullable=False)
     budget = Column(Float, nullable=False)
+    expected_delivery_date = Column(Date, nullable=False)
     description = Column(Text, nullable=False)
 
     # AI-enhanced fields

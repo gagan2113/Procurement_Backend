@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.models.request import PurchaseRequest
 from backend.schemas.request_schema import PRCreate, PRUpdate, AIValidationResult
-from backend.config.constants import PR_NUMBER_PREFIX
+from backend.config.constants import PR_NUMBER_PREFIX, AIStatus
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -25,7 +25,7 @@ def _generate_pr_number(db: Session) -> str:
 def create_pr(
     db: Session,
     data: PRCreate,
-    ai_result: AIValidationResult,
+    ai_result: Optional[AIValidationResult] = None,
     pdf_path: Optional[str] = None,
 ) -> PurchaseRequest:
     pr_number = _generate_pr_number(db)
@@ -36,11 +36,12 @@ def create_pr(
         category=data.category,
         quantity=data.quantity,
         budget=data.budget,
+        expected_delivery_date=data.expected_delivery_date,
         description=data.description,
-        improved_description=ai_result.improved_description,
-        missing_fields=ai_result.missing_fields,
-        budget_feedback=ai_result.budget_feedback,
-        ai_status=ai_result.status.value,
+        improved_description=ai_result.improved_description if ai_result else None,
+        missing_fields=ai_result.missing_fields if ai_result else [],
+        budget_feedback=ai_result.budget_feedback if ai_result else None,
+        ai_status=ai_result.status.value if ai_result else AIStatus.PENDING.value,
         pdf_path=pdf_path,
     )
     db.add(pr)
