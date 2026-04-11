@@ -29,7 +29,7 @@ Rules:
 PR_VALIDATION_PROMPT = ChatPromptTemplate.from_messages([
     ("system", PR_VALIDATION_SYSTEM_PROMPT),
     ("human", PR_VALIDATION_HUMAN_PROMPT),
-])
+  ])
 
 
 DESCRIPTION_REWRITE_SYSTEM_PROMPT = """You are a procurement writing assistant.

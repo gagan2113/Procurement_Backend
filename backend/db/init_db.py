@@ -1,11 +1,15 @@
 from sqlalchemy import inspect, text
+from pathlib import Path
 
 from backend.db.session import engine
+from backend.db.session import SessionLocal
 from backend.db.base import Base
+from backend.db.vendor_seed import ensure_vendor_seed_data
 from backend.utils.logger import get_logger
 
 # Import all models so they are registered on the Base metadata
 import backend.models.request  # noqa: F401
+import backend.models.vendor  # noqa: F401
 
 logger = get_logger(__name__)
 
@@ -57,3 +61,9 @@ def create_all_tables() -> None:
     """Create all database tables and patch schema drift for SQLite."""
     Base.metadata.create_all(bind=engine)
     _sync_purchase_request_schema()
+
+    workbook_path = Path(__file__).resolve().parents[2] / "VendorDatabase_ProcureAI.xlsx"
+    with SessionLocal() as db:
+        seeded = ensure_vendor_seed_data(db=db, excel_path=workbook_path)
+        if seeded:
+            logger.info("Vendor seed data loaded from %s", workbook_path)

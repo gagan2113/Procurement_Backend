@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from backend.db.init_db import create_all_tables
 from backend.config.settings import get_settings
 from backend.routes import request as request_router
+from backend.routes import vendor as vendor_router
 from backend.utils.logger import app_logger as logger
 
 settings = get_settings()
@@ -69,6 +70,7 @@ app.add_middleware(
 # ─── Routers ──────────────────────────────────────────────────────────────────
 
 app.include_router(request_router.router, prefix="/api/v1")
+app.include_router(vendor_router.router, prefix="/api/v1")
 
 
 # ─── Health Check ─────────────────────────────────────────────────────────────
