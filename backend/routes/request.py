@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from backend.config.constants import PRStatus
 from backend.db.session import get_db
 from backend.schemas.request_schema import PRCreate, PRUpdate, DescriptionRewriteRequest
 from backend.services import request_service
@@ -81,6 +82,19 @@ async def update_purchase_request(
     db: Session = Depends(get_db),
 ):
     return await request_service.update_purchase_request(db=db, pr_id=pr_id, data=data)
+
+
+@router.post(
+    "/{pr_id}/finance-approve",
+    summary="Finance Approve PR",
+    description="Marks PR as approved and automatically initiates RFQ draft creation workflow.",
+)
+async def finance_approve_purchase_request(pr_id: str, db: Session = Depends(get_db)):
+    return await request_service.update_purchase_request(
+        db=db,
+        pr_id=pr_id,
+        data=PRUpdate(status=PRStatus.APPROVED),
+    )
 
 
 @router.get(

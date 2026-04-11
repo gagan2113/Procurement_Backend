@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from backend.config.constants import PRStatus
 from backend.llm.llm_provider import get_llm
 from backend.llm.prompt_templates import DESCRIPTION_REWRITE_PROMPT
 from backend.repositories import request_repo
@@ -21,6 +22,7 @@ from backend.schemas.request_schema import (
     PRUpdate,
 )
 from backend.services.pdf_service import generate_pr_pdf
+from backend.services import rfq_service
 from backend.utils.logger import get_logger
 from backend.utils.response_formatter import success_response
 
@@ -365,6 +367,7 @@ async def update_purchase_request(db: Session, pr_id: str, data: PRUpdate) -> di
     }
     needs_pdf_regen = bool(set(updated_fields.keys()) & printable_fields)
 
+    previous_status = pr.status
     pr = request_repo.update_pr(db=db, pr=pr, data=data, ai_result=None)
 
     if needs_pdf_regen:
@@ -384,7 +387,13 @@ async def update_purchase_request(db: Session, pr_id: str, data: PRUpdate) -> di
         except Exception as exc:
             logger.error("PDF regeneration failed (non-fatal): %s", exc)
 
+    response_payload = _to_pr_response(pr)
+
+    if data.status == PRStatus.APPROVED and previous_status != PRStatus.APPROVED.value:
+        rfq_workflow = await rfq_service.auto_create_rfq_for_approved_pr(db=db, pr=pr)
+        response_payload["rfq_workflow"] = rfq_workflow
+
     return success_response(
-        data=_to_pr_response(pr),
+        data=response_payload,
         message=f"Purchase Request {pr.pr_number} updated successfully.",
     )

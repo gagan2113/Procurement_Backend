@@ -15,6 +15,25 @@ class AIStatus(str, Enum):
     PENDING = "pending"
 
 
+class RFQStatus(str, Enum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+class DistributionStatus(str, Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+
+
+class BidStatus(str, Enum):
+    SUBMITTED = "submitted"
+    EVALUATED = "evaluated"
+    SELECTED = "selected"
+
+
 class ProcurementCategory(str, Enum):
     IT_HARDWARE = "IT Hardware"
     IT_SOFTWARE = "IT Software"

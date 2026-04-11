@@ -240,3 +240,223 @@ def generate_pr_pdf(
     doc.build(elements)
     logger.info("PDF generated: %s", file_path)
     return str(file_path)
+
+
+def generate_rfq_pdf(
+    rfq_number: str,
+    pr_number: str,
+    material_name: str,
+    category: str,
+    quantity: int,
+    delivery_date,
+    status: str,
+    submission_deadline=None,
+    payment_terms: Optional[str] = None,
+    specifications: Optional[str] = None,
+    scope_of_work: Optional[str] = None,
+    technical_specifications: Optional[str] = None,
+    evaluation_criteria: Optional[str] = None,
+    created_at: Optional[datetime] = None,
+) -> str:
+    """Generate RFQ PDF from RFQ master details."""
+    pdf_dir = _get_pdf_dir()
+    safe_number = rfq_number.replace("/", "-")
+    file_path = pdf_dir / f"{safe_number}.pdf"
+
+    doc = SimpleDocTemplate(
+        str(file_path),
+        pagesize=A4,
+        leftMargin=2 * cm,
+        rightMargin=2 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2 * cm,
+    )
+
+    styles = getSampleStyleSheet()
+    elements = []
+
+    title_style = ParagraphStyle(
+        "RfqTitle",
+        parent=styles["Normal"],
+        fontSize=20,
+        textColor=WHITE,
+        fontName="Helvetica-Bold",
+        alignment=TA_CENTER,
+        spaceAfter=4,
+    )
+    subtitle_style = ParagraphStyle(
+        "RfqSubtitle",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=colors.HexColor("#CBD5E1"),
+        fontName="Helvetica",
+        alignment=TA_CENTER,
+    )
+
+    header_data = [
+        [Paragraph("REQUEST FOR QUOTATION", title_style)],
+        [Paragraph(f"Procurement AI System &nbsp;|&nbsp; {settings.app_name}", subtitle_style)],
+    ]
+    header_table = Table(header_data, colWidths=[17 * cm])
+    header_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), BRAND_BLUE),
+        ("TOPPADDING", (0, 0), (-1, 0), 16),
+        ("BOTTOMPADDING", (0, -1), (-1, -1), 14),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 0.4 * cm))
+
+    meta_label = ParagraphStyle(
+        "RfqMetaLabel",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=TEXT_MUTED,
+        fontName="Helvetica-Bold",
+    )
+    meta_value = ParagraphStyle(
+        "RfqMetaValue",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=TEXT_DARK,
+        fontName="Helvetica-Bold",
+    )
+
+    date_str = (created_at or datetime.utcnow()).strftime("%d %b %Y, %H:%M UTC")
+    submission_str = str(submission_deadline) if submission_deadline else "N/A"
+
+    meta_data = [
+        [
+            Paragraph("RFQ NUMBER", meta_label),
+            Paragraph("PR NUMBER", meta_label),
+            Paragraph("STATUS", meta_label),
+        ],
+        [
+            Paragraph(rfq_number, ParagraphStyle("rfqNumber", parent=meta_value, textColor=ACCENT, fontSize=12)),
+            Paragraph(pr_number, meta_value),
+            Paragraph(status.title(), meta_value),
+        ],
+        [
+            Paragraph("DATE CREATED", meta_label),
+            Paragraph("DELIVERY DATE", meta_label),
+            Paragraph("SUBMISSION DEADLINE", meta_label),
+        ],
+        [
+            Paragraph(date_str, meta_value),
+            Paragraph(str(delivery_date), meta_value),
+            Paragraph(submission_str, meta_value),
+        ],
+    ]
+    meta_table = Table(meta_data, colWidths=[5.6 * cm, 5.6 * cm, 5.8 * cm])
+    meta_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), BRAND_LIGHT),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("LINEBELOW", (0, 0), (-1, 0), 1, colors.HexColor("#CBD5E1")),
+        ("LINEBELOW", (0, 2), (-1, 2), 1, colors.HexColor("#CBD5E1")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    elements.append(meta_table)
+    elements.append(Spacer(1, 0.5 * cm))
+
+    def section_header(title: str):
+        sh = ParagraphStyle(
+            "RfqSH",
+            parent=styles["Normal"],
+            fontSize=10,
+            textColor=WHITE,
+            fontName="Helvetica-Bold",
+            leftIndent=8,
+        )
+        table = Table([[Paragraph(title.upper(), sh)]], colWidths=[17 * cm])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), ACCENT),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        return table
+
+    label_style = ParagraphStyle("rfqLbl", parent=styles["Normal"], fontSize=9, textColor=TEXT_MUTED, fontName="Helvetica-Bold")
+    value_style = ParagraphStyle("rfqVal", parent=styles["Normal"], fontSize=10, textColor=TEXT_DARK, fontName="Helvetica")
+
+    elements.append(section_header("Material Details"))
+    elements.append(Spacer(1, 0.2 * cm))
+    details_data = [
+        [
+            Paragraph("Material", label_style),
+            Paragraph("Category", label_style),
+            Paragraph("Quantity", label_style),
+            Paragraph("Payment Terms", label_style),
+        ],
+        [
+            Paragraph(material_name, value_style),
+            Paragraph(category or "N/A", value_style),
+            Paragraph(str(quantity), value_style),
+            Paragraph(payment_terms or "N/A", value_style),
+        ],
+    ]
+    details_table = Table(details_data, colWidths=[5.2 * cm, 3.5 * cm, 2.5 * cm, 5.8 * cm])
+    details_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F1F5F9")),
+        ("BACKGROUND", (0, 1), (-1, 1), WHITE),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    elements.append(details_table)
+    elements.append(Spacer(1, 0.45 * cm))
+
+    body_style = ParagraphStyle(
+        "rfqBody",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=TEXT_DARK,
+        leading=15,
+        leftIndent=6,
+        rightIndent=6,
+    )
+
+    narrative_sections = [
+        ("Specifications", specifications),
+        ("Scope of Work", scope_of_work),
+        ("Technical Specifications", technical_specifications),
+        ("Evaluation Criteria", evaluation_criteria),
+    ]
+
+    for title, content in narrative_sections:
+        elements.append(section_header(title))
+        elements.append(Spacer(1, 0.2 * cm))
+        table = Table([[Paragraph(content or "Not specified", body_style)]], colWidths=[17 * cm])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), WHITE),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ("TOPPADDING", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 0.3 * cm))
+
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#CBD5E1")))
+    elements.append(Spacer(1, 0.2 * cm))
+
+    footer_style = ParagraphStyle(
+        "rfqFooter",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=TEXT_MUTED,
+        alignment=TA_CENTER,
+    )
+    elements.append(Paragraph(
+        f"Generated by {settings.app_name} &nbsp;|&nbsp; {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} &nbsp;|&nbsp; CONFIDENTIAL",
+        footer_style,
+    ))
+
+    doc.build(elements)
+    logger.info("RFQ PDF generated: %s", file_path)
+    return str(file_path)

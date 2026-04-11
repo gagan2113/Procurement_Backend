@@ -9,7 +9,9 @@ from fastapi.responses import JSONResponse
 
 from backend.db.init_db import create_all_tables
 from backend.config.settings import get_settings
+from backend.routes import bid as bid_router
 from backend.routes import request as request_router
+from backend.routes import rfq as rfq_router
 from backend.routes import vendor as vendor_router
 from backend.utils.logger import app_logger as logger
 
@@ -71,6 +73,8 @@ app.add_middleware(
 
 app.include_router(request_router.router, prefix="/api/v1")
 app.include_router(vendor_router.router, prefix="/api/v1")
+app.include_router(rfq_router.router, prefix="/api/v1")
+app.include_router(bid_router.router, prefix="/api/v1")
 
 
 # ─── Health Check ─────────────────────────────────────────────────────────────
