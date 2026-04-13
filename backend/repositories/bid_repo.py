@@ -20,26 +20,50 @@ def create_or_update_bid(
 	rfq_id: str,
 	vendor_id: str,
 	vendor_name: str,
-	quoted_price: float,
+	price: float,
 	currency: str,
-	quoted_delivery_days: int,
-	technical_compliance_pct: float,
-	quality_commitment_score: float,
-	warranty_months: int,
-	payment_terms_days: Optional[int],
-	notes: Optional[str],
+	lead_time_days: int,
+	delivery_schedule: str,
+	delivery_terms: str,
+	payment_terms: str,
+	validity_days: int,
+	specification_compliance: float,
+	alternative_product: Optional[str],
+	quotation_pdf_path: str,
+	technical_sheet_path: str,
+	compliance_documents_path: str,
+	certifications_path: str,
+	document_status: str,
+	extracted_price: Optional[float],
+	extracted_delivery_terms: Optional[str],
+	extracted_conditions: Optional[str],
+	extracted_compliance_details: Optional[str],
+	document_summary: Optional[str],
+	document_compliance_score: Optional[float],
 ) -> Bid:
 	bid = get_bid_by_rfq_vendor(db=db, rfq_id=rfq_id, vendor_id=vendor_id)
 	if bid:
 		bid.vendor_name = vendor_name
-		bid.quoted_price = quoted_price
+		bid.price = price
 		bid.currency = currency
-		bid.quoted_delivery_days = quoted_delivery_days
-		bid.technical_compliance_pct = technical_compliance_pct
-		bid.quality_commitment_score = quality_commitment_score
-		bid.warranty_months = warranty_months
-		bid.payment_terms_days = payment_terms_days
-		bid.notes = notes
+		bid.lead_time_days = lead_time_days
+		bid.delivery_schedule = delivery_schedule
+		bid.delivery_terms = delivery_terms
+		bid.payment_terms = payment_terms
+		bid.validity_days = validity_days
+		bid.specification_compliance = specification_compliance
+		bid.alternative_product = alternative_product
+		bid.quotation_pdf_path = quotation_pdf_path
+		bid.technical_sheet_path = technical_sheet_path
+		bid.compliance_documents_path = compliance_documents_path
+		bid.certifications_path = certifications_path
+		bid.document_status = document_status
+		bid.extracted_price = extracted_price
+		bid.extracted_delivery_terms = extracted_delivery_terms
+		bid.extracted_conditions = extracted_conditions
+		bid.extracted_compliance_details = extracted_compliance_details
+		bid.document_summary = document_summary
+		bid.document_compliance_score = document_compliance_score
 		bid.status = BidStatus.SUBMITTED.value
 		bid.updated_at = datetime.utcnow()
 		db.commit()
@@ -51,14 +75,26 @@ def create_or_update_bid(
 		rfq_id=rfq_id,
 		vendor_id=vendor_id,
 		vendor_name=vendor_name,
-		quoted_price=quoted_price,
+		price=price,
 		currency=currency,
-		quoted_delivery_days=quoted_delivery_days,
-		technical_compliance_pct=technical_compliance_pct,
-		quality_commitment_score=quality_commitment_score,
-		warranty_months=warranty_months,
-		payment_terms_days=payment_terms_days,
-		notes=notes,
+		lead_time_days=lead_time_days,
+		delivery_schedule=delivery_schedule,
+		delivery_terms=delivery_terms,
+		payment_terms=payment_terms,
+		validity_days=validity_days,
+		specification_compliance=specification_compliance,
+		alternative_product=alternative_product,
+		quotation_pdf_path=quotation_pdf_path,
+		technical_sheet_path=technical_sheet_path,
+		compliance_documents_path=compliance_documents_path,
+		certifications_path=certifications_path,
+		document_status=document_status,
+		extracted_price=extracted_price,
+		extracted_delivery_terms=extracted_delivery_terms,
+		extracted_conditions=extracted_conditions,
+		extracted_compliance_details=extracted_compliance_details,
+		document_summary=document_summary,
+		document_compliance_score=document_compliance_score,
 		status=BidStatus.SUBMITTED.value,
 	)
 	db.add(bid)
@@ -112,9 +148,14 @@ def replace_evaluations(db: Session, rfq_id: str, rows: List[dict]) -> List[BidE
 			delivery_score=row["delivery_score"],
 			quality_score=row["quality_score"],
 			risk_score=row["risk_score"],
+			reliability_score=row.get("reliability_score"),
+			capability_score=row.get("capability_score"),
+			document_compliance_score=row.get("document_compliance_score"),
 			final_score=row["final_score"],
 			rank=row["rank"],
 			is_selected=row.get("is_selected", False),
+			manual_override=row.get("manual_override", False),
+			score_breakdown=row.get("score_breakdown"),
 			strengths=row.get("strengths", []),
 			risks=row.get("risks", []),
 			recommendation=row.get("recommendation", "Consider"),
@@ -161,3 +202,75 @@ def select_vendor_in_evaluations(db: Session, rfq_id: str, vendor_id: str) -> Op
 	db.commit()
 	db.refresh(selected)
 	return selected
+
+
+def apply_manual_override(
+	db: Session,
+	*,
+	rfq_id: str,
+	vendor_id: str,
+	override_score: Optional[float],
+	recommendation: Optional[str],
+	breakdown: Optional[dict],
+) -> Optional[BidEvaluation]:
+	target = (
+		db.query(BidEvaluation)
+		.filter(BidEvaluation.rfq_id == rfq_id, BidEvaluation.vendor_id == vendor_id)
+		.first()
+	)
+	if not target:
+		return None
+
+	now = datetime.utcnow()
+	if breakdown:
+		target.price_score = float(breakdown.get("price", target.price_score))
+		target.quality_score = float(breakdown.get("quality", target.quality_score))
+		target.delivery_score = float(breakdown.get("delivery", target.delivery_score))
+		target.reliability_score = float(breakdown.get("reliability", target.reliability_score or 0.0))
+		target.capability_score = float(breakdown.get("capability", target.capability_score or 0.0))
+		target.risk_score = float(breakdown.get("risk", target.risk_score))
+		target.score_breakdown = breakdown
+
+	if override_score is not None:
+		target.final_score = float(override_score)
+	elif breakdown:
+		target.final_score = (
+			(float(target.price_score) * 0.30)
+			+ (float(target.quality_score) * 0.25)
+			+ (float(target.delivery_score) * 0.20)
+			+ (float(target.reliability_score or 0.0) * 0.15)
+			+ (float(target.capability_score or 0.0) * 0.10)
+		)
+
+	if recommendation:
+		target.recommendation = recommendation
+
+	strengths = list(target.strengths or [])
+	if "Manual override applied" not in strengths:
+		strengths.append("Manual override applied")
+	target.strengths = strengths
+	target.manual_override = True
+	target.updated_at = now
+
+	db.commit()
+	db.refresh(target)
+	return target
+
+
+def rerank_evaluations(db: Session, rfq_id: str) -> List[BidEvaluation]:
+	rows = (
+		db.query(BidEvaluation)
+		.filter(BidEvaluation.rfq_id == rfq_id)
+		.order_by(BidEvaluation.final_score.desc(), BidEvaluation.quality_score.desc(), BidEvaluation.delivery_score.desc())
+		.all()
+	)
+
+	now = datetime.utcnow()
+	for idx, row in enumerate(rows, start=1):
+		row.rank = idx
+		row.updated_at = now
+
+	db.commit()
+	for row in rows:
+		db.refresh(row)
+	return rows

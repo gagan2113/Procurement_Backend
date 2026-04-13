@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, List, Optional, Sequence
 
 from sqlalchemy import func, or_
@@ -36,6 +37,47 @@ def list_vendors(
 
 def get_vendor_by_id(db: Session, vendor_id: str) -> Optional[Vendor]:
 	return db.query(Vendor).filter(Vendor.vendor_id == vendor_id).first()
+
+
+def get_vendor_by_email(db: Session, email: str) -> Optional[Vendor]:
+	return db.query(Vendor).filter(func.lower(Vendor.email) == email.strip().lower()).first()
+
+
+def _generate_public_vendor_id(db: Session) -> str:
+	today = datetime.utcnow().strftime("%Y%m%d")
+	prefix = f"V-PUBLIC-{today}-"
+	count = db.query(Vendor).filter(Vendor.vendor_id.like(f"{prefix}%")).count()
+	return f"{prefix}{(count + 1):04d}"
+
+
+def create_public_vendor(
+	db: Session,
+	*,
+	vendor_name: str,
+	email: str,
+	category: Optional[str],
+	contact_person: Optional[str],
+	phone: Optional[str],
+	city: Optional[str],
+	state: Optional[str],
+	country: Optional[str],
+) -> Vendor:
+	vendor = Vendor(
+		vendor_id=_generate_public_vendor_id(db),
+		vendor_name=vendor_name,
+		email=email,
+		category=category,
+		contact_person=contact_person,
+		phone=phone,
+		city=city,
+		state=state,
+		country=country,
+		contract_exists=False,
+	)
+	db.add(vendor)
+	db.commit()
+	db.refresh(vendor)
+	return vendor
 
 
 def get_purchase_history_by_vendor_id(db: Session, vendor_id: str) -> List[PurchaseHistory]:

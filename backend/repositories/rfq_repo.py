@@ -51,6 +51,7 @@ def create_rfq(
         payment_terms=payment_terms,
         evaluation_criteria=evaluation_criteria,
         status=RFQStatus.DRAFT.value,
+        invited_vendors_count=0,
     )
     db.add(rfq)
     db.commit()
@@ -118,17 +119,55 @@ def update_rfq_pdf_path(db: Session, rfq: RFQ, pdf_path: str) -> RFQ:
     return rfq
 
 
-def update_rfq_publication(db: Session, rfq: RFQ, public_link: str) -> RFQ:
+def update_rfq_fields(db: Session, rfq: RFQ, updates: dict) -> RFQ:
+    for field, value in updates.items():
+        if hasattr(rfq, field):
+            setattr(rfq, field, value)
+
+    rfq.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(rfq)
+    return rfq
+
+
+def mark_rfq_as_published(db: Session, rfq: RFQ) -> RFQ:
     now = datetime.utcnow()
     rfq.status = RFQStatus.PUBLISHED.value
-    rfq.public_link = public_link
-    rfq.published_at = now
-
-    # Keep strict lifecycle transition while ending in open-for-bidding state.
-    rfq.status = RFQStatus.OPEN.value
-    rfq.open_for_bidding_at = now
+    if not rfq.published_at:
+        rfq.published_at = now
     rfq.updated_at = now
 
+    db.commit()
+    db.refresh(rfq)
+    return rfq
+
+
+def mark_rfq_open_for_bidding(db: Session, rfq: RFQ, public_link: str) -> RFQ:
+    now = datetime.utcnow()
+    if not rfq.published_at:
+        rfq.published_at = now
+
+    rfq.status = RFQStatus.OPEN.value
+    rfq.public_link = public_link
+    if not rfq.open_for_bidding_at:
+        rfq.open_for_bidding_at = now
+    rfq.updated_at = now
+
+    db.commit()
+    db.refresh(rfq)
+    return rfq
+
+
+def update_rfq_distribution_metrics(
+    db: Session,
+    *,
+    rfq: RFQ,
+    invited_vendors_count: int,
+    last_sent_at: datetime,
+) -> RFQ:
+    rfq.invited_vendors_count = invited_vendors_count
+    rfq.last_sent_at = last_sent_at
+    rfq.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(rfq)
     return rfq
@@ -140,6 +179,17 @@ def close_rfq(db: Session, rfq: RFQ) -> RFQ:
     db.commit()
     db.refresh(rfq)
     return rfq
+
+
+def delete_rfq_with_relations(db: Session, rfq: RFQ) -> None:
+    # Keep cleanup explicit to avoid orphaned RFQ-linked records.
+    from backend.models.bid import Bid, BidEvaluation
+
+    db.query(BidEvaluation).filter(BidEvaluation.rfq_id == rfq.id).delete()
+    db.query(Bid).filter(Bid.rfq_id == rfq.id).delete()
+    db.query(RFQDistribution).filter(RFQDistribution.rfq_id == rfq.id).delete()
+    db.delete(rfq)
+    db.commit()
 
 
 def get_material_mapped_vendor_ids(db: Session, material_name: str, category: Optional[str]) -> set[str]:

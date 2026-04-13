@@ -31,6 +31,8 @@ class RFQ(Base):
     status = Column(String(20), nullable=False, default=RFQStatus.DRAFT.value)
     public_link = Column(String(512), nullable=True)
     pdf_path = Column(String(512), nullable=True)
+    invited_vendors_count = Column(Integer, nullable=False, default=0)
+    last_sent_at = Column(DateTime, nullable=True)
 
     published_at = Column(DateTime, nullable=True)
     open_for_bidding_at = Column(DateTime, nullable=True)
