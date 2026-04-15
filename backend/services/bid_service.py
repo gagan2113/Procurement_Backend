@@ -18,6 +18,108 @@ from backend.utils.response_formatter import success_response
 settings = get_settings()
 
 
+def _estimate_specification_compliance_from_text(value: str) -> Optional[float]:
+	text = (value or "").strip().lower()
+	if not text:
+		return None
+
+	# Accept common qualitative inputs from UI text areas when vendors describe compliance in words.
+	if "fully" in text and "compliant" in text:
+		return 100.0
+	if "not compliant" in text or "non compliant" in text or "non-compliant" in text:
+		return 25.0
+	if "partially" in text and "compliant" in text:
+		return 70.0
+	if "mostly" in text and "compliant" in text:
+		return 85.0
+	if "compliant" in text:
+		return 95.0
+
+	if "minor deviation" in text or "small deviation" in text:
+		return 80.0
+	if "major deviation" in text:
+		return 55.0
+
+	return None
+
+
+def _coerce_float_field(
+	field_name: str,
+	value: object,
+	*,
+	min_value: Optional[float] = None,
+	max_value: Optional[float] = None,
+	allow_percent_suffix: bool = False,
+) -> float:
+	raw = str(value or "").strip()
+	if not raw:
+		raise HTTPException(
+			status_code=status.HTTP_400_BAD_REQUEST,
+			detail=f"'{field_name}' is required.",
+		)
+
+	normalized = raw.replace(",", "")
+	normalized = re.sub(r"[₹$€£]", "", normalized)
+	if allow_percent_suffix and normalized.endswith("%"):
+		normalized = normalized[:-1]
+	normalized = normalized.strip()
+
+	try:
+		parsed = float(normalized)
+	except ValueError:
+		numeric_match = re.search(r"-?\d+(?:\.\d+)?", normalized)
+		if numeric_match:
+			parsed = float(numeric_match.group(0))
+		elif field_name == "specification_compliance":
+			estimated = _estimate_specification_compliance_from_text(normalized)
+			if estimated is None:
+				raise HTTPException(
+					status_code=status.HTTP_400_BAD_REQUEST,
+					detail=(
+						"'specification_compliance' must be a valid number between 0 and 100 "
+						"or a compliance phrase like 'Fully compliant' / 'Partially compliant'."
+					),
+				)
+			parsed = estimated
+		else:
+			raise HTTPException(
+				status_code=status.HTTP_400_BAD_REQUEST,
+				detail=f"'{field_name}' must be a valid number.",
+			)
+
+	if min_value is not None and parsed < min_value:
+		raise HTTPException(
+			status_code=status.HTTP_400_BAD_REQUEST,
+			detail=f"'{field_name}' must be greater than or equal to {min_value}.",
+		)
+
+	if max_value is not None and parsed > max_value:
+		raise HTTPException(
+			status_code=status.HTTP_400_BAD_REQUEST,
+			detail=f"'{field_name}' must be less than or equal to {max_value}.",
+		)
+
+	return parsed
+
+
+def _coerce_int_field(field_name: str, value: object, *, min_value: Optional[int] = None) -> int:
+	parsed = _coerce_float_field(field_name=field_name, value=value)
+	if not parsed.is_integer():
+		raise HTTPException(
+			status_code=status.HTTP_400_BAD_REQUEST,
+			detail=f"'{field_name}' must be a whole number.",
+		)
+
+	parsed_int = int(parsed)
+	if min_value is not None and parsed_int < min_value:
+		raise HTTPException(
+			status_code=status.HTTP_400_BAD_REQUEST,
+			detail=f"'{field_name}' must be greater than or equal to {min_value}.",
+		)
+
+	return parsed_int
+
+
 def _clip_score(value: float) -> float:
 	return max(0.0, min(100.0, float(value)))
 
@@ -464,31 +566,42 @@ async def submit_bid_with_documents(
 	*,
 	rfq_id: str,
 	vendor_id: str,
-	price: float,
+	price: object,
 	currency: str,
-	lead_time: int,
+	lead_time: object,
 	delivery_schedule: str,
 	delivery_terms: str,
 	payment_terms: str,
-	validity: int,
-	specification_compliance: float,
+	validity: object,
+	specification_compliance: object,
 	alternative_product: Optional[str],
 	quotation_pdf: UploadFile,
 	technical_sheet: UploadFile,
 	compliance_documents: UploadFile,
 	certifications: UploadFile,
 ) -> dict:
+	parsed_price = _coerce_float_field(field_name="price", value=price, min_value=0.01)
+	parsed_lead_time = _coerce_int_field(field_name="lead_time", value=lead_time, min_value=1)
+	parsed_validity = _coerce_int_field(field_name="validity", value=validity, min_value=1)
+	parsed_specification_compliance = _coerce_float_field(
+		field_name="specification_compliance",
+		value=specification_compliance,
+		min_value=0.0,
+		max_value=100.0,
+		allow_percent_suffix=True,
+	)
+
 	try:
 		payload = BidSubmitRequest(
 			vendor_id=vendor_id,
-			price=price,
+			price=parsed_price,
 			currency=currency,
-			lead_time=lead_time,
+			lead_time=parsed_lead_time,
 			delivery_schedule=delivery_schedule,
 			delivery_terms=delivery_terms,
 			payment_terms=payment_terms,
-			validity=validity,
-			specification_compliance=specification_compliance,
+			validity=parsed_validity,
+			specification_compliance=parsed_specification_compliance,
 			alternative_product=alternative_product,
 		)
 	except ValidationError as exc:

@@ -2,9 +2,10 @@
 RFQ Routes
 """
 
+import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -12,7 +13,6 @@ from backend.db.session import get_db
 from backend.schemas.rfq_schema import (
 	RFQManualCreateRequest,
 	RFQPublicVendorRegisterRequest,
-	RFQSendRequest,
 	RFQUpdateRequest,
 )
 from backend.services import rfq_service
@@ -122,8 +122,41 @@ async def open_rfq_for_bidding(rfq_id: str, db: Session = Depends(get_db)):
 	summary="Send RFQ to relevant vendors",
 	description="Validates RFQ completeness, publishes from Draft, and sends notifications to relevant vendors.",
 )
-async def send_rfq_to_vendors(rfq_id: str, payload: RFQSendRequest, db: Session = Depends(get_db)):
-	return await rfq_service.send_rfq_to_vendors(db=db, rfq_id=rfq_id, vendor_ids=payload.vendor_ids)
+async def send_rfq_to_vendors(
+	rfq_id: str,
+	request: Request,
+	db: Session = Depends(get_db),
+):
+	vendor_ids: list[str] = []
+	raw_body = await request.body()
+
+	if raw_body and raw_body.strip():
+		try:
+			body = json.loads(raw_body)
+		except json.JSONDecodeError as exc:
+			raise HTTPException(
+				status_code=status.HTTP_400_BAD_REQUEST,
+				detail="Invalid JSON body. Provide a JSON object or omit the request body.",
+			) from exc
+
+		if not isinstance(body, dict):
+			raise HTTPException(
+				status_code=status.HTTP_400_BAD_REQUEST,
+				detail="Request body must be a JSON object.",
+			)
+
+		raw_vendor_ids = body.get("vendor_ids", body.get("vendorIds"))
+		if raw_vendor_ids is None:
+			vendor_ids = []
+		elif isinstance(raw_vendor_ids, list):
+			vendor_ids = [str(vendor_id).strip() for vendor_id in raw_vendor_ids if str(vendor_id).strip()]
+		else:
+			raise HTTPException(
+				status_code=status.HTTP_400_BAD_REQUEST,
+				detail="'vendor_ids' must be an array of vendor ids.",
+			)
+
+	return await rfq_service.send_rfq_to_vendors(db=db, rfq_id=rfq_id, vendor_ids=vendor_ids)
 
 
 @router.get(
